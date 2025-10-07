@@ -1,0 +1,242 @@
+---
+- block:
+    - name: "[ Linux ] Comprimir archivos a backup"
+      ansible.builtin.archive:
+        path: "{{ item }}"
+        dest: "/tmp/backup_{{ cambio }}_{{ inventory_hostname }}.tar.gz"
+      loop:
+        - "{{ linux_files }}"
+     
+  when: 
+    - inventory_hostname != "bastion.local.com"
+    - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+  tags:
+    - primera
+    - segunda
+
+
+- block: 
+    - name: "[ Solaris ] Comprimir archivos a backup"
+      ansible.builtin.archive:
+        path: "{{ item }}"
+        dest: "/tmp/backup_{{ cambio }}_{{ inventory_hostname }}.tar.gz"  
+      loop:
+        - "{{ solaris_files }}"
+
+  when: 
+    - inventory_hostname != "bastion.local.com"
+    - ansible_facts['os_family'] == 'Solaris'
+  tags:
+    - primera 
+    - segunda
+
+- block: 
+    - name: "[ AIX ] Comprimir archivos a backup"
+      ansible.builtin.archive:
+        path: "{{ item }}"
+        dest: "/tmp/backup_{{ cambio }}_{{ inventory_hostname }}.tar.gz" 
+      loop:
+        - "{{ aix_files }}"
+
+  when: 
+    - inventory_hostname != "bastion.local.com"
+    - ansible_facts['os_family'] == 'AIX' 
+  tags:
+    - primera 
+    - segunda
+
+- name: "[ bastion.local.com ] Mover backup Inicial a Nodo de Control"
+  ansible.builtin.fetch:
+    src: "/tmp/backup_{{ cambio }}_{{ inventory_hostname }}.tar.gz"
+    dest: "{{ dest_backup }}/{{ cambio }}/backup/backup_{{ cambio }}_{{ inventory_hostname }}_inicial.tar.gz"  
+    flat: yes
+  when: 
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    
+- name: "[ bastion.local.com ] Mover backup Final a Nodo de Control"
+  ansible.builtin.fetch:
+    src: "/tmp/backup_{{ cambio }}_{{ inventory_hostname }}.tar.gz"
+    dest: "{{ dest_backup }}/{{ cambio }}/backup/backup_{{ cambio }}_{{ inventory_hostname }}_final.tar.gz"  
+    flat: yes
+  when: 
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda
+
+- name: "[ bastion.local.com ] Eliminar backup temporal"
+  ansible.builtin.file:
+    path: "/tmp/backup_{{ cambio }}_{{ inventory_hostname }}.tar.gz"
+    state: absent
+  when: 
+    - inventory_hostname != "bastion.local.com"  
+  tags:
+    - primera
+    - segunda
+  
+# Backup dmesg
+- block:
+    - name: "[ Linux ] Generar Backup de DMESG"
+      ansible.builtin.command: dmesg 
+      register: dmesg_output
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+      
+    - name: "[ Linux ] Guardar salida de DMESG en variable"
+      ansible.builtin.set_fact:
+        dmesg_content: "{{ dmesg_output.stdout | default('No tiene salida de DMESG') }}"
+      when: 
+        - dmesg_output is defined and dmesg_output.stdout is defined
+
+    - name: "[ Linux ] Guardar salida de DMESG en archivo"
+      delegate_to: bastion.local.com
+      ansible.builtin.copy:
+        content: "{{ dmesg_content }}"
+        dest: "{{ dest_infoprepos }}/{{ cambio }}/backup/dmesg_inicial{{ inventory_hostname }}"
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+    
+
+    - name: "[ Solaris ] Generar Backup de DMESG"
+      ansible.builtin.command: dmesg  
+      register: dmesg_output
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'
+    
+    - name: "[ Solaris ] Guardar salida de DMESG en archivo"
+      delegate_to: bastion.local.com
+      ansible.builtin.copy:
+        content: "{{ dmesg_output.stdout }}"
+        dest: "{{ dest_infoprepos }}/{{ cambio }}/backup/dmesg_inicial{{ inventory_hostname }}"
+      when: 
+        - dmesg_output is defined and dmesg_output.stdout is defined
+
+    - name: "[ AIX ] Generar Backup de DMESG"
+      ansible.builtin.command: errpt -a 
+      register: dmesg_output
+      when: 
+        - ansible_facts['os_family'] == 'AIX'
+    
+    - name: "[ AIX ] Guardar salida de DMESG en archivo"
+      delegate_to: bastion.local.com
+      ansible.builtin.copy:
+        content: "{{ dmesg_output.stdout }}"
+        dest: "{{ dest_infoprepos }}/{{ cambio }}/backup/dmesg_inicial{{ inventory_hostname }}"
+      when: 
+        - dmesg_output is defined and dmesg_output.stdout is defined
+
+  when: 
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+
+- block:
+    - name: "[ Linux ] Generar Backup de DMESG"
+      ansible.builtin.command: dmesg 
+      register: dmesg_output
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+      
+    - name: "[ Linux ] Guardar salida de DMESG en variable"
+      ansible.builtin.set_fact:
+        dmesg_content: "{{ dmesg_output.stdout | default('No tiene salida de DMESG') }}"
+      when: 
+        - dmesg_output is defined and dmesg_output.stdout is defined
+
+    - name: "[ Linux ] Guardar salida de DMESG en archivo"
+      delegate_to: bastion.local.com
+      ansible.builtin.copy:
+        content: "{{ dmesg_content }}"
+        dest: "{{ dest_infoprepos }}/{{ cambio }}/backup/dmesg_final{{ inventory_hostname }}"
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+    
+
+    - name: "[ Solaris ] Generar Backup de DMESG"
+      ansible.builtin.command: dmesg  
+      register: dmesg_output
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'
+    
+    - name: "[ Solaris ] Guardar salida de DMESG en archivo"
+      delegate_to: bastion.local.com
+      ansible.builtin.copy:
+        content: "{{ dmesg_output.stdout }}"
+        dest: "{{ dest_infoprepos }}/{{ cambio }}/backup/dmesg_final{{ inventory_hostname }}"
+      when: 
+        - dmesg_output is defined and dmesg_output.stdout is defined
+
+    - name: "[ AIX ] Generar Backup de DMESG"
+      ansible.builtin.command: errpt -a 
+      register: dmesg_output
+      when: 
+        - ansible_facts['os_family'] == 'AIX'
+    
+    - name: "[ AIX ] Guardar salida de DMESG en archivo"
+      delegate_to: bastion.local.com
+      ansible.builtin.copy:
+        content: "{{ dmesg_output.stdout }}"
+        dest: "{{ dest_infoprepos }}/{{ cambio }}/backup/dmesg_final{{ inventory_hostname }}"
+      when: 
+        - dmesg_output is defined and dmesg_output.stdout is defined
+
+  when: 
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda        
+
+# Extraer Backup de LDOMs
+- block:
+    
+    - name: "[Solaris] Consultar si la maquina es Domain Control"
+      ansible.builtin.shell: "virtinfo -a | grep -q \"Domain role:.*control\" && echo \"Yes\""
+      register: tipo_nodo
+      failed_when: false
+      changed_when: tipo_nodo.rc in [0,1]
+
+    - name: "[Solaris] Mostrar el tipo de Host para debug"
+      ansible.builtin.debug:
+        msg: "El tipo de host es: {{ tipo_nodo.stdout }}"
+      when: 
+        - tipo_nodo is defined and tipo_nodo.stdout is defined
+
+    - name: "[Solaris] Exportar XML de LDOMs"
+      ansible.builtin.command: ldm list-constraints -x
+      register: ldoms_xml_output
+      when:
+        - tipo_nodo is defined and tipo_nodo.stdout is defined 
+        - tipo_nodo.stdout == "Yes"
+    
+    - name: "[Solaris] Exportar Servicios de LDOMs"
+      ansible.builtin.command: ldm list-services
+      register: ldoms_services_output
+      when: 
+        - tipo_nodo is defined and tipo_nodo.stdout is defined
+        - tipo_nodo.stdout == "Yes"
+
+    - name: "[ Solaris ] Guardar salida lista de LDOMs en archivo"
+      delegate_to: bastion.local.com
+      ansible.builtin.copy:
+        content: "{{ ldoms_xml_output.stdout }}"
+        dest: "{{ dest_infoprepos }}/{{ cambio }}/backup/ldoms_list_{{ inventory_hostname }}"
+      when:
+        - ldoms_xml_output is defined and ldoms_xml_output.stdout is defined
+        - tipo_nodo is defined and tipo_nodo.stdout is defined
+        
+
+    - name: "[ Solaris ] Guardar salida de Servicios de LDOMs en archivo"
+      delegate_to: bastion.local.com
+      ansible.builtin.copy:
+        content: "{{ ldoms_services_output.stdout }}"
+        dest: "{{ dest_infoprepos }}/{{ cambio }}/backup/ldoms_services_{{ inventory_hostname }}"  
+      when: 
+        - tipo_nodo is defined and tipo_nodo.stdout is defined
+        - ldoms_xml_output is defined and ldoms_xml_output.stdout is defined
+
+  when: 
+    - inventory_hostname != "bastion.local.com"
+    - ansible_facts['os_family'] == 'Solaris'
+  tags:
+        - primera
+        - segunda

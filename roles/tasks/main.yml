@@ -1,0 +1,78 @@
+---
+
+- name: Preparar Entorno de Ruster
+  import_tasks: preparar_ruster.yml
+
+- name: Generar Backup de archivos
+  import_tasks: backup_files.yml
+
+- name: Obtener Filesystems
+  import_tasks: get_filesystems.yml
+
+- name: Obtener Version SO
+  import_tasks: get_osversion.yml
+
+- name: Obtener Discos Fisicos
+  import_tasks: get_discos_fisicos.yml
+
+- name: Obtener Volumenes Logicos
+  import_tasks: get_volumegroup.yml
+
+- name: Obtener Interfaces de Red
+  import_tasks: get_network.yml
+
+- name: Obtener Informacion de Rutas
+  import_tasks: get_rutas.yml
+
+- name: Obtener Informacion de Recursos
+  import_tasks: get_recursos.yml
+
+- name: Obtener Informacion de Puertos
+  import_tasks: get_puertos.yml
+
+- name: Obtener Nameservers
+  import_tasks: get_nameservers.yml
+
+- name: Obtener Informacion de HBAs
+  import_tasks: get_hbas.yml
+
+- name: Obtener Multipath
+  import_tasks: get_multipath.yml
+
+- name: Obtener Discos ASM
+  import_tasks: get_asmdisks.yml
+
+- name: Obtener Headers
+  import_tasks: get_headers.yml
+
+- name: Obtener LDOMs
+  import_tasks: get_ldoms.yml
+
+- name: Generar Reporte Inicial HTML Consolidado
+  import_tasks: load_reporte_inicial.yml
+  tags:
+    - primera
+
+- name: Haciendo Validacion y Ajuste a las Vistas Mysql
+  import_tasks: ajustes_finales_y_vistas.yml
+  tags:
+    - primera    
+
+- name: Generar Reporte Final HTML Consolidado
+  import_tasks: load_reporte_final.yml
+  tags:
+    - segunda
+
+- name: Generar Reporte Inicial HTML Consolidado
+  import_tasks: load_reporte_diff.yml
+  tags:
+    - segunda
+
+#- name: Enviar reporte inicial
+#  import_tasks: envio_reportes.yml
+
+- name: Generar Historico del InfoPrePos
+  import_tasks: generar_historico.yml
+  tags:
+    - programado
+

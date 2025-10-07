@@ -1,0 +1,80 @@
+- block: 
+    - name: "[ Linux ] Extraer Discos ASM"
+      ansible.builtin.script: files/getASM.sh linux
+      args:
+        executable: /bin/bash
+      register: asmdisks
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+      failed_when: false
+      changed_when: asmdisks.rc in [ 1 ]
+      
+
+    - name: "[ Linux ] Guardar Variable Fact de ASM"
+      set_fact:
+          asmdisks_content: "{{ asmdisks.stdout | default('No tiene Discos ASM') }}"
+      when:
+        - asmdisks is defined and asmdisks.stdout is defined
+
+    - name: "[ Solaris ] Extraer Discos ASM"
+      ansible.builtin.script: files/getASM.sh solaris
+      args:
+        executable: /bin/bash
+      register: asmdisks
+      failed_when: false
+      changed_when: asmdisks.rc in [ 1 ]  
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'
+
+    - name: "[ Solaris ] Guardar Variable Fact de ASM"
+      set_fact:
+          asmdisks_content: "{{ asmdisks.stdout | default('No tiene Discos ASM') }}"
+      when:
+        - asmdisks is defined and asmdisks.stdout is defined
+
+    - name: "[ AIX ] Extraer Discos ASM"
+      ansible.builtin.script: files/getASM.sh aix
+      args:
+        executable: /bin/bash
+      register: asmdisks
+      failed_when: false
+      changed_when: asmdisks.rc in [ 1 ]  
+      when: 
+        - ansible_facts['os_family'] == 'AIX'
+
+    - name: "[ AIX ] Guardar Variable Fact de ASM"
+      set_fact:
+          asmdisks_content: "{{ asmdisks.stdout | default('No tiene Discos ASM') }}"
+      when:
+        - asmdisks is defined and asmdisks.stdout is defined  
+
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de ASM"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ asmdisks_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/asm_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de ASM"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ asmdisks_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/asm_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de ASM"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/asm_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/asm_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/asm_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda

@@ -1,0 +1,142 @@
+---
+- block: 
+    - name: "[ Linux ] Extraer Memoria RAM"
+      ansible.builtin.shell: free -m
+      register: memoria_ram
+      failed_when: false
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+
+    - name: "[ Linux ] Extraer Memoria SWAP"
+      ansible.builtin.shell: cat /proc/swaps
+      failed_when: false
+      register: memoria_swap
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+
+    
+    - name: "[ Linux ] Extraer CPUs"
+      ansible.builtin.shell: lscpu
+      failed_when: false
+      register: cpus
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+        - ansible_facts['distribution_major_version'] != '5'
+
+    - name: "[ Linux ] Guardar Variable Fact de Recursos"
+      set_fact:
+          recursos_content: "{{ memoria_ram.stdout }} + '\n' + {{ memoria_swap.stdout }} + '\n' + {{ cpus.stdout }}"
+      when: memoria_ram is defined and memoria_ram.stdout is defined and memoria_swap is defined and memoria_swap.stdout is defined and cpus is defined and cpus.stdout is defined
+    
+    - name: "[ Linux - Espcial ] Extraer CPUs "
+      ansible.builtin.shell: cat /proc/cpuinfo
+      failed_when: false
+      register: cpus
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+        - ansible_facts['distribution_major_version'] == '5'
+       
+
+    - name: "[ Linux ] Guardar Variable Fact de Recursos"
+      set_fact:
+          recursos_content: "{{ memoria_ram.stdout }} + '\n' + {{ memoria_swap.stdout }} + '\n' + {{ cpus.stdout }}"
+      when: memoria_ram is defined and memoria_ram.stdout is defined and memoria_swap is defined and memoria_swap.stdout is defined and cpus is defined and cpus.stdout is defined
+            
+    - name: "[ Solaris ] Extraer Memoria RAM"
+      ansible.builtin.shell: prtconf -v | grep "Memory size"
+      failed_when: false
+      register: memoria_ram
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'  
+
+    - name: "[ Solaris ] Extraer Memoria SWAP"
+      ansible.builtin.shell: swap -l
+      failed_when: false
+      register: memoria_swap
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'    
+
+    - name: "[ Solaris ] Extraer CPUs"
+      ansible.builtin.shell: psrinfo -p -v
+      failed_when: false
+      register: cpus
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'
+
+    - name: "[ Solaris ] Guardar Variable Fact de Recursos"
+      set_fact:
+          recursos_content: "{{ memoria_ram.stdout }} + '\n' + {{ memoria_swap.stdout }} + '\n' + {{ cpus.stdout }}"
+      when: memoria_ram is defined and memoria_ram.stdout is defined and memoria_swap is defined and memoria_swap.stdout is defined and cpus is defined and cpus.stdout is defined
+            
+    - name: "[ AIX ] Extraer Memoria RAM"
+      ansible.builtin.shell: | 
+             lparstat -i | grep 'Desired Memory' | cut -d: -f2 | awk '{ print "MEMORIA:"$1 }'
+      failed_when: false
+      register: memoria_ram
+      when: 
+        - ansible_facts['os_family'] == 'AIX'
+    
+    - name: "[ AIX ] Extraer Memoria SWAP"
+      ansible.builtin.shell: lsps -a | grep -v "Page Space" | awk '{ printf "SWAP:%s:%s:%s:%s:%s\n",$1,$2,$3,$4,$6 }'
+      failed_when: false
+      register: memoria_swap
+      when: 
+        - ansible_facts['os_family'] == 'AIX'
+
+    - name: "[ AIX ] Extraer CPUs"
+      ansible.builtin.shell: lparstat -i | grep 'Desired Capacity' | awk '{ print "CPU:"$NF }'
+      failed_when: false
+      register: cpus
+      when: 
+        - ansible_facts['os_family'] == 'AIX'
+
+    - name: "[ AIX ] Guardar Variable Fact de Recursos"
+      set_fact:
+          recursos_content: "{{ memoria_ram.stdout }} + '\n' + {{ memoria_swap.stdout }} + '\n' + {{ cpus.stdout }}"
+      when: memoria_ram is defined and memoria_ram.stdout is defined and memoria_swap is defined and memoria_swap.stdout is defined and cpus is defined and cpus.stdout is defined  
+      
+      
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de Recursos"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content:  "{{ recursos_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/recursos_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 1 ] Insertando informacion de recursos Base de datos"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          UPDATE `reporte_detalle` SET `recursos` = '{{ recursos_content }}' WHERE `cambio` = '{{ cambio }}' AND `hostname` = '{{ inventory_hostname }}';
+  tags:
+    - primera
+
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de Recursos"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ recursos_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/recursos_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de Recursos"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/recursos_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/recursos_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/recursos_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda
+

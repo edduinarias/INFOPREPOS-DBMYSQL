@@ -1,0 +1,95 @@
+---
+- block: 
+    - name: "[ Linux ] Extraer Interfaces de Red"
+      ansible.builtin.script: files/getNetworks.sh linux
+      args:
+        executable: /bin/bash
+      failed_when: false
+      register: networks
+      changed_when: networks.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+
+    - name: "[ Linux ] Guardar Variable Fact de Interfaces de Red"
+      set_fact:
+          networks_content: "{{ networks.stdout }}"
+      when: networks is defined and networks.stdout is defined
+      
+      
+    - name: "[ Solaris ] Extraer Interfaces de Red"
+      ansible.builtin.script: files/getNetworks.sh solaris
+      args:
+        executable: /bin/bash
+      failed_when: false
+      register: networks
+      changed_when: networks.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'Solaris' 
+
+    - name: "[ Solaris ] Guardar Variable Fact de Interfaces de Red"
+      set_fact:
+          networks_content: "{{ networks.stdout }}"
+      when: networks is defined and networks.stdout is defined
+      
+    - name: "[ AIX ] Extraer Interfaces de Red"
+      ansible.builtin.script: files/getNetworks.sh aix
+      args:
+        executable: /bin/bash
+      failed_when: false
+      register: networks
+      changed_when: networks.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'AIX' 
+    
+    - name: "[ AIX ] Guardar Variable Fact de Interfaces de Red"
+      set_fact:
+          networks_content: "{{ networks.stdout }}"
+      when: networks is defined and networks.stdout is defined
+      
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de Interfaces de Red"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ networks_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/networks_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+- set_fact:
+    contenido_interfaces: "{{ raw_interfaces | regex_replace('[^\x00-\x7F]', '') }}"
+
+- name: "[ Ejecucion: 1 ] Insertando informacion de Interfaces de red en la   Base de datos"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          UPDATE `reporte_detalle` SET `networks` = '{{ networks_content }}' WHERE `cambio` = '{{ cambio }}' AND `hostname` = '{{ inventory_hostname }}';
+  tags:
+    - primera
+
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de Interfaces de Red"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ networks_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/networks_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de Interfaces de Red"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/networks_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/networks_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/networks_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda
+

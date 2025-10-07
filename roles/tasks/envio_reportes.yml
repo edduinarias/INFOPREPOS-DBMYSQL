@@ -1,0 +1,42 @@
+---
+- name: Enviar correo de Info PrePost
+  become: false
+  mail:
+    #host: 172.22.16.179 <- Cuando se lanza desde AWX
+    host: "{{ email_host }}"
+    port: "{{ email_port }}"
+    subject: "{{ cambio }} - {{ titulo_cambio }} - InfoPrePost 1"
+    subtype: html
+    body: "{{ lookup('template', 'infoprepos_report.j2') }}"  
+    from: "{{ email_from }}"
+    to: "{{ email_to }}"
+    cc: "{{ email_cc }}"
+    attach: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/reporte_inicial.html"
+  delegate_to: bastion.local.com
+  run_once: yes
+  ignore_errors: yes
+  tags:
+    - primera
+    - envio_reportes
+
+- name: Enviar correo de Info PrePost Segunda Ejecucion
+  become: false
+  mail:
+    #host: 172.22.16.179 <- Cuando se lanza desde AWX
+    host: "{{ email_host }}"
+    port: "{{ email_port }}"
+    subject: "{{ cambio }} - {{ titulo_cambio }} - InfoPrePost 2"
+    subtype: html
+    body: "{{ lookup('template', 'infoprepos_report.j2') }}"  
+    from: "{{ email_from }}"
+    to: "{{ email_to }}"
+    cc: "{{ email_cc }}"
+    attach: 
+       - "{{ dest_infoprepos }}/{{ cambio }}/diff/reporte_diferencias.html"
+       - "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/reporte_inicial.html"
+       - "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/reporte_final.html"
+  delegate_to: bastion.local.com
+  run_once: yes
+  tags:
+    - segunda
+    - envio_reportes

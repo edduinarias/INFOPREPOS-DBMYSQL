@@ -1,0 +1,87 @@
+---
+- block: 
+    - name: "[ Linux ] Extreaer Tabla de Rutas"
+      ansible.builtin.script: files/getRoutes.sh
+      args:
+        executable: /bin/bash
+      register: rutas
+      when: 
+        - inventory_hostname != "bastion.local.com"
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+      failed_when: false
+      changed_when: rutas.rc in [ 1 ]
+      
+
+    - name: "[ Linux ] Guardar Variable Fact de Tablas de Rutas"
+      set_fact:
+          rutas_content: "{{ rutas.stdout | default('No pude Obtener Rutas') }}"
+      
+      
+    - name: "[ Solaris ] Extraer Tablas de Rutas"
+      ansible.builtin.shell: netstat -nr
+      failed_when: false
+      register: rutas
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'
+
+    - name: "[ Solaris ] Guardar Variable Fact de Tablas de Rutas"
+      set_fact:
+          rutas_content: "{{ rutas.stdout }}"
+      when: rutas is defined and rutas.stdout is defined
+      
+    - name: "[ AIX ] Extraer Tablas de Rutas"
+      ansible.builtin.shell: |
+          netstat -rn -f inet
+      failed_when: false
+      register: rutas
+      when: 
+        - ansible_facts['os_family'] == 'AIX' 
+    
+    - name: "[ AIX ] Guardar Variable Fact de Tablas de Rutas"
+      set_fact:
+          rutas_content: "{{ rutas.stdout  }}"
+      when: rutas is defined and rutas.stdout is defined
+
+      
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de Tablas de Rutas"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ rutas_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/rutas_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 1 ] Insertando informacion de rutas en la   Base de datos"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          UPDATE reporte_detalle  SET rutas = "{{ rutas_content | replace("'", "''") }}" WHERE cambio = "{{ cambio }}" AND hostname = "{{ inventory_hostname }}";
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de Tablas de Rutas"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ rutas_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/rutas_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de Tablas de Rutas"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/rutas_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/rutas_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/rutas_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda

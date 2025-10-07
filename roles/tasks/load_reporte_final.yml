@@ -1,0 +1,20 @@
+---
+- name: Copiar script Python al host remoto
+  delegate_to: bastion.local.com
+  run_once: true
+  copy:
+    src: load_final_report.py
+    dest: /tmp/load_final_report.py
+    mode: '0755'
+
+- name: Ejecutar el script de generación de reporte
+  delegate_to: bastion.local.com
+  run_once: true
+  command: >
+    python3 /tmp/load_final_report.py
+    --cambio {{ cambio }}
+    --titulo '{{ titulo_cambio }}'
+    --usuario {{ tower_user_name }}
+    --output {{ dest_infoprepos }}/{{ cambio }}/reporte_final/reporte_final.html
+    --dest_infoprepos {{ dest_infoprepos }}
+  

@@ -1,0 +1,133 @@
+---
+- name: Obtener facts estrictamente necesarios
+  ansible.builtin.setup:
+    gather_subset:
+      - 'all'
+      - 'min'
+    filter: 
+      - ansible_date_time
+      - ansible_distribution
+      - ansible_distribution_version
+      - ansible_kernel
+      - ansible_default_ipv4.address
+      - ansible_hostname
+      - ansible_processor_vcpus
+      - ansible_memtotal_mb
+      - ansible_architecture
+      - ansible_virtualization_role
+      - ansible_product_name
+      - ansible_product_uuid
+      - ansible_os_family
+      - ansible_processor_cores
+      - ansible_machine_id
+      - ansible_dns
+      - ansible_distribution_major_version
+  timeout: 120
+  ignore_unreachable: yes
+  register: setup_facts_result
+  tags:
+    - primera
+    - segunda
+
+- name: Finalizar ejecución para hosts fallidos (unreachable o timeout)
+  ansible.builtin.meta: end_host
+  when: setup_facts_result.unreachable is defined and setup_facts_result.unreachable
+  tags:
+    - primera
+    - segunda
+
+
+- name: "[ bastion.local.com ] Crear Directorio del Cambio"
+  delegate_to: bastion.local.com
+  run_once: true
+  ansible.builtin.file:
+    path:  "{{ dest_infoprepos }}/{{ cambio }}"
+    state: directory
+    mode: '0755'
+    owner: "1000" 
+    group: "{{ grupoadmin }}"
+  tags:
+    - primera
+
+- name: "[ bastion.local.com ] Crear Directorio backup"
+  delegate_to: bastion.local.com
+  run_once: true
+  ansible.builtin.file:
+    path:  "{{ dest_infoprepos }}/{{ cambio }}/backup"
+    state: directory
+    mode: '0755'
+    owner: "1000" 
+    group: "{{ grupoadmin }}"
+  tags:
+    - primera
+
+- name: "[ bastion.local.com ] Crear Directorio del reporte inicial"
+  delegate_to: bastion.local.com
+  run_once: true
+  ansible.builtin.file:
+    path:  "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial"
+    state: directory
+    mode: '0755'
+    owner: "1000" 
+    group: "{{ grupoadmin }}"
+  tags:
+    - primera
+
+- name: "[ bastion.local.com ] Crear Directorio del reporte final"
+  delegate_to: bastion.local.com
+  run_once: true
+  ansible.builtin.file:
+    path:  "{{ dest_infoprepos }}/{{ cambio }}/reporte_final"
+    state: directory
+    mode: '0755'
+    owner: "1000" 
+    group: "{{ grupoadmin }}"
+  tags:
+    - primera
+
+- name: "[ bastion.local.com ] Crear Directorio del diff"
+  delegate_to: bastion.local.com
+  run_once: true
+  ansible.builtin.file:
+    path:  "{{ dest_infoprepos }}/{{ cambio }}/diff"
+    state: directory
+    mode: '0755'
+    owner: "1000" 
+    group: "{{ grupoadmin }}"
+  tags:
+    - primera
+
+- name: Definir fecha y hora actual en formato MySQL
+  set_fact:
+    current_time: "{{ lookup('pipe', 'date +\"%Y-%m-%d %H:%M:%S\"') }}"
+  delegate_to: localhost
+  run_once: true
+  tags:
+    - primera
+    
+- name: "[ Ejecucion: 1 ] Creando el registro Tabla REPORTE en DB Mysql"
+  # when: inventory_hostname != "bastion.local.com"
+  delegate_to: bastion.local.com
+  run_once: true
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          INSERT INTO `reporte` (`fecha`,`creado_por`,`cambio`,`descripcion`,`motivo`) VALUES ('{{ current_time }}','1','{{ cambio }}','{{ descripcion }}','1');
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 1 ] Creando el registro en DB Mysql"
+  # when: inventory_hostname != "bastion.local.com"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          INSERT INTO `reporte_detalle` (`cambio`,`hostname`,`tiporeporte`) VALUES ('{{ cambio }}','{{ inventory_hostname }}','{{ tiporeporte }}');
+  tags:
+    - primera

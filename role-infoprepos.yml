@@ -1,0 +1,8 @@
+---
+- name: Role para Generar informe de estado de Servidores UNIX
+  hosts: all
+  gather_facts: true
+  vars:
+    servidores_list: "{{ servidores.split('\n') | map('trim') | reject('==','') | list }}"
+  roles:
+    - roles

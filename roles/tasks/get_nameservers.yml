@@ -1,0 +1,95 @@
+---
+- block: 
+    - name: "[ Linux ] Extraer Nameservers"
+      ansible.builtin.shell: cat /etc/resolv.conf
+      register: nameservers
+      failed_when: false
+      changed_when: nameservers.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+
+    - name: "[ Linux ] Guardar Variable Fact de Nameservers"
+      set_fact:
+          nameservers_content: |
+              {{ nameservers.stdout | default('') }}
+               # Nameservers: {{ ansible_dns.nameservers | default([]) | join(', ') }}
+               # Search domains: {{ ansible_dns.search | default([]) | join(', ') }}
+      when: nameservers is defined and nameservers.stdout is defined
+      
+      
+    - name: "[ Solaris ] Extraer Nameservers"
+      ansible.builtin.shell: cat /etc/resolv.conf
+      failed_when: false      
+      register: nameservers
+      changed_when: nameservers.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'Solaris' 
+
+    - name: "[ Solaris ] Guardar Variable Fact de Nameservers"
+      set_fact:
+          nameservers_content: |
+              {{ nameservers.stdout | default('') }}
+               # Nameservers: {{ ansible_dns.nameservers | default([]) | join(', ') }}
+               # Search domains: {{ ansible_dns.search | default([]) | join(', ') }}
+      when: nameservers is defined and nameservers.stdout is defined
+      
+    - name: "[ AIX ] Extraer Nameservers"
+      ansible.builtin.shell: grep -v ^# /etc/resolv.conf | grep ^nameserver | awk '{ print "DNS:"$2 }'
+      failed_when: false
+      register: nameservers
+      changed_when: nameservers.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'AIX' 
+    
+    - name: "[ AIX ] Guardar Variable Fact de Nameservers"
+      set_fact:
+          nameservers_content: |
+              {{ nameservers.stdout | default('') }}
+               # Nameservers: {{ ansible_dns.nameservers | default([]) | join(', ') }}
+               # Search domains: {{ ansible_dns.search | default([]) | join(', ') }}
+      when: nameservers is defined and nameservers.stdout is defined
+      
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de Nameservers"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ nameservers_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/nameservers_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 1 ] Insertando informacion de namespaces en la   Base de datos"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          UPDATE `reporte_detalle` SET `namespaces` = '{{ nameservers_content }}' WHERE `cambio` = '{{ cambio }}' AND `hostname` = '{{ inventory_hostname }}';
+  tags:
+    - primera
+
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de Nameservers"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ nameservers_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/nameservers_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de Nameservers"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/nameservers_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/nameservers_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/nameservers_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda
+

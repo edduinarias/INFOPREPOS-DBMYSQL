@@ -1,0 +1,93 @@
+---
+- block: 
+    - name: "[ Linux ] Extraer Volumenes Logicos"
+      ansible.builtin.script: files/getLogicalVolume.sh linux
+      args:
+        executable: /bin/bash
+      register: volumenes_logicos
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+      failed_when: false
+      changed_when: volumenes_logicos.rc in [ 1 ]
+
+    - name: "[ Linux ] Guardar Variable Fact de Volumenes Logicos"
+      set_fact:
+          volumenes_logicos_content: "{{ volumenes_logicos.stdout }}"
+      when: volumenes_logicos is defined and volumenes_logicos.stdout is defined  
+      
+      
+    - name: "[ Solaris ] Extraer Volumenes Logicos"
+      ansible.builtin.script: files/getLogicalVolume.sh solaris
+      args:
+        executable: /bin/bash
+      register: volumenes_logicos
+      failed_when: false
+      changed_when: volumenes_logicos.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'Solaris' 
+
+    - name: "[ Solaris ] Guardar Variable Fact de Volumenes Logicos"
+      set_fact:
+          volumenes_logicos_content: "{{ volumenes_logicos.stdout }}"
+      when: volumenes_logicos is defined and volumenes_logicos.stdout is defined
+      
+    - name: "[ AIX ] Extraer Volumenes Logicos"
+      ansible.builtin.script: files/getLogicalVolume.sh aix
+      args:
+        executable: /bin/bash
+      register: volumenes_logicos
+      failed_when: false
+      changed_when: volumenes_logicos.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'AIX' 
+          
+    - name: "[ AIX ] Guardar Variable Fact de Volumenes Logicos"
+      set_fact:
+          volumenes_logicos_content: "{{ volumenes_logicos.stdout }}"
+      when: volumenes_logicos is defined and volumenes_logicos.stdout is defined
+      
+
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de volumenes logicos"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ volumenes_logicos_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/volumenes_logicos_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+
+- name: "[ Ejecucion: 1 ] Insertando informacion de recursos Base de datos"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          UPDATE `reporte_detalle` SET `volumeneslogicos` = '{{ volumenes_logicos_content }}' WHERE `cambio` = '{{ cambio }}' AND `hostname` = '{{ inventory_hostname }}';
+  tags:
+    - primera
+   
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de volumenes logicos"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ volumenes_logicos_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/volumenes_logicos_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de Volumenes Logicos"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/volumenes_logicos_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/volumenes_logicos_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/volumenes_logicos_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda

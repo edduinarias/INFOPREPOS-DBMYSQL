@@ -1,0 +1,9 @@
+---
+- name: "[ bastion.local.com ] Generar Historial del InfoPrePos"
+  delegate_to: bastion.local.com
+  run_once: true
+  command: "mv {{ dest_backup }}/{{ cambio }}  {{ dest_backup }}/{{ cambio }}_{{ ansible_date_time.iso8601 }} "
+  when: 
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - programado  

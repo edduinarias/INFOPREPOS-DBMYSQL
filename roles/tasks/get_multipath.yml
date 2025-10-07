@@ -1,0 +1,90 @@
+---
+- block: 
+    - name: "[ Linux ] Extraer Mulipath"
+      ansible.builtin.shell: |
+        echo "=== Dispositivos multipath (multipath -ll) ==="
+        multipath -ll 2>/dev/null || echo "No se encontró multipath o no está instalado."
+        echo "=== Configuración de multipath (multipath -v3) ==="
+        multipath -v3 2>/dev/null || echo "No se pudo obtener la configuración."
+      register: multipath
+      when: 
+        - inventory_hostname != "bastion.local.com"
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+      failed_when: false
+      changed_when: multipath.rc in [ 1 ]
+      tags:
+        - primera
+        - segunda
+
+    - name: "[ Linux ] Guardar Variable Fact de Multipath"
+      set_fact:
+          multipath_content: "{{ multipath.stdout }}"
+      when: multipath is defined and multipath.stdout is defined      
+      
+    - name: "[ Solaris ] Extraer Multipath"
+      ansible.builtin.shell: |
+          echo "=== Dispositivos multipath (mpathadm list lu) ==="
+          mpathadm list lu 2>/dev/null || echo "No se encontró multipath o no está instalado."
+          echo "=== Configuración de multipath (luxadm -e port) ==="
+          luxadm -e port 2>/dev/null || echo "No se pudo obtener la configuración."
+      register: multipath
+      failed_when: false
+      changed_when: multipath.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'
+      
+
+    - name: "[ Solaris ] Guardar Variable Fact de Multipath"
+      set_fact:
+          multipath_content: "{{ multipath.stdout }}"
+      when: multipath is defined and multipath.stdout is defined
+      
+    - name: "[ AIX ] Extraer Multipath"
+      ansible.builtin.shell: |
+          echo "=== Dispositivos multipath (lspath) ==="
+          lspath -F "name:parent:path_id:status" 2>/dev/null || echo "No se encontraron dispositivos multipath."
+          echo "=== Configuración de MPIO (lsattr -El fscsiX) ==="
+          for fscsi in $(lsdev -Cc adapter -l fscsi* | awk '{print $1}'); do
+            lsattr -El $fscsi 2>/dev/null || echo "No se pudo obtener la configuración de $fscsi."
+          done
+      register: multipath    
+      failed_when: false
+      changed_when: multipath.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'AIX' 
+    
+    - name: "[ AIX ] Guardar Variable Fact de Multipath"
+      set_fact:
+          multipath_content: "{{ multipath.stdout }}"
+      when: multipath is defined and multipath.stdout is defined
+      
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de Multipath"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ multipath_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/multipath_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de Multipath"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ multipath_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/multipath_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de Multipath"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+      diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/multipath_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/multipath_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/multipath_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda

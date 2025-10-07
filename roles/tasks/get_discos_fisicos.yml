@@ -1,0 +1,98 @@
+---
+- block: 
+    - name: "[ Linux ] Extraer Discos Fisicos"
+      ansible.builtin.shell: lsblk
+      failed_when: false
+      register: discos_fisicos
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+        - ansible_facts['distribution_major_version'] != '5'
+      
+    - name: "[ Linux ] Guardar Variable Fact de Discos Fisicos"
+      set_fact:
+          discos_fisicos_content: "{{ discos_fisicos.stdout }}"
+      when: discos_fisicos is defined and discos_fisicos.stdout is defined
+
+    
+    - name: "[ Linux - Especial ] Extraer Discos Fisicos"
+      ansible.builtin.shell: cat /proc/partitions
+      failed_when: false
+      register: discos_fisicos
+      when: 
+        - ansible_facts['os_family'] == 'RedHat' 
+        - ansible_facts['distribution_major_version'] == '5'
+    
+    - name: "[ Linux - Especial ] Guardar Variable Fact de Discos Fisicos"
+      set_fact:
+          discos_fisicos_content: "{{ discos_fisicos.stdout }}"
+      when: 
+        - discos_fisicos is defined and discos_fisicos.stdout is defined
+        - ansible_facts['os_family'] == 'RedHat' 
+        - ansible_facts['distribution_major_version'] == '5'
+
+    - name: "[ Solaris ] Extraer Discos Fisicos"
+      ansible.builtin.shell: luxadm probe
+      register: discos_fisicos
+      failed_when: false
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'
+      
+    - name: "[ Solaris ] Guardar Variable Fact de Discos Fisicos"
+      set_fact:
+          discos_fisicos_content: "{{ discos_fisicos.stdout }}"
+      when: discos_fisicos is defined and discos_fisicos.stdout is defined
+      
+    - name: "[ AIX ] Extraer Discos Fisicos"
+      ansible.builtin.shell: lspv | awk '{ print $1 }' | sort
+      failed_when: false
+      register: discos_fisicos
+      when: 
+        - ansible_facts['os_family'] == 'AIX' 
+    
+    - name: "[ AIX ] Guardar Variable Fact de Discos Fisicos"
+      set_fact:
+          discos_fisicos_content: "{{ discos_fisicos.stdout }}"
+      when: discos_fisicos is defined and discos_fisicos.stdout is defined
+
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de Discos Fisicos"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ discos_fisicos_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/discos_fisicos_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 1 ] Insertando informacion de Version del Sistema de red en la   Base de datos"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          UPDATE `reporte_detalle` SET `discosfisicos` = '{{ discos_fisicos_content }}' WHERE `cambio` = '{{ cambio }}' AND `hostname` = '{{ inventory_hostname }}';
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de Discos Fisicos"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ discos_fisicos_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/discos_fisicos_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de Discos Fisicos"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/discos_fisicos_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/discos_fisicos_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/discos_fisicos_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda

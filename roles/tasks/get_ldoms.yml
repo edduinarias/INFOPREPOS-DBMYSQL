@@ -1,0 +1,67 @@
+---
+- name: "[ Solaris ] Consultar si la Maquina es Fisica o Virtual"
+  ansible.builtin.script: files/getServerType.sh solaris
+  args:
+    executable: /bin/sh
+  register: tiposerver_result
+  failed_when: false
+  changed_when: tiposerver_result.rc in [0, 1]
+  when: 
+    - ansible_facts['os_family'] == 'Solaris' 
+  tags:
+    - primera
+    - segunda
+
+- name: "[Solaris] Exportar Servicios de LDOMs"
+  ansible.builtin.command: ldm list
+  register: ldoms_status
+  when: 
+    - ansible_facts['os_family'] == 'Solaris' 
+    - tiposerver_result is defined and tiposerver_result.stdout
+    - tiposerver_result.stdout == "Fisico"    
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de LDOMs"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ ldoms_status.stdout }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/ldoms_{{ inventory_hostname }}"
+    mode: '0644'
+  when:
+    - ansible_facts['os_family'] == 'Solaris'
+    - tiposerver_result is defined
+    - tiposerver_result.stdout == "Fisico"
+    - ldoms_status is defined
+  tags:
+    - primera
+
+
+- name: "[ Ejecucion: 2 ] Crear reporte Final de LDOMs"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ ldoms_status.stdout }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/ldoms_{{ inventory_hostname }}"
+    mode: '0644'
+  when:
+    - inventory_hostname != "bastion.local.com"
+    - ansible_facts['os_family'] == 'Solaris'
+    - tiposerver_result is defined
+    - tiposerver_result.stdout == "Fisico"
+    - ldoms_status is defined
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de LDOMS"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/ldoms_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/ldoms_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/ldoms_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+    - ansible_facts['os_family'] == 'Solaris'
+    - tiposerver_result is defined
+    - tiposerver_result.stdout == "Fisico"
+    - ldoms_status is defined
+  tags:
+    - segunda

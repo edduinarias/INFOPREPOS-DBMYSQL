@@ -1,0 +1,83 @@
+---
+- block: 
+    - name: "[ Linux ] Extraer Puertos de escucha"
+      ansible.builtin.shell: timeout 10s netstat -tulpn | grep -v tcp6 | grep LISTEN
+      failed_when: false
+      register: puertos
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+
+    - name: "[ Linux ] Guardar Variable Fact de Puertos de escucha"
+      set_fact:
+          puertos_content: "{{ puertos.stdout }}"
+      when: puertos is defined and puertos.stdout is defined
+      
+      
+    - name: "[ Solaris ] Extraer Puertos de escucha"
+      ansible.builtin.shell: netstat -an | grep LISTEN | sort -k 4
+      failed_when: false
+      register: puertos
+      when: 
+        - ansible_facts['os_family'] == 'Solaris'
+
+    - name: "[ Solaris ] Guardar Variable Fact de Puertos de escucha"
+      set_fact:
+          puertos_content: "{{ puertos.stdout }}"
+      when: puertos is defined and puertos.stdout is defined
+      
+    - name: "[ AIX ] Extraer Puertos de escucha"
+      ansible.builtin.shell: netstat -an | grep -v tcp6 | grep LISTEN | sort -k 4
+      failed_when: false
+      register: puertos
+      when: 
+        - ansible_facts['os_family'] == 'AIX' 
+    
+    - name: "[ AIX ] Guardar Variable Fact de Puertos de escucha"
+      set_fact:
+          puertos_content: "{{ puertos.stdout }}"
+      when: puertos is defined and puertos.stdout is defined
+      
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de Puertos de escucha"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ puertos_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/puertos_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 1 ] Insertando informacion puertos_content  en la   Base de datos"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          UPDATE `reporte_detalle` SET `puertos` = '{{ puertos_content }}' WHERE `cambio` = '{{ cambio }}' AND `hostname` = '{{ inventory_hostname }}';
+  tags:
+    - primera
+
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de Puertos de escucha"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ puertos_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/puertos_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de Puertos de escucha"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/puertos_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/puertos_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/puertos_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda
+

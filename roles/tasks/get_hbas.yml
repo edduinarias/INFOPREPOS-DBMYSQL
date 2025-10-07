@@ -1,0 +1,94 @@
+---
+- block: 
+    - name: "[ Linux ] Extraer HBAs"
+      ansible.builtin.script: files/getHBAs.sh linux
+      args:
+        executable: /bin/bash
+      register: hbas
+      when: 
+        - inventory_hostname != "bastion.local.com"
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+      failed_when: false
+      changed_when: hbas.rc in [ 1 ]
+      tags:
+        - primera
+        - segunda
+
+    - name: "[ Linux ] Guardar Variable Fact de HBAs"
+      set_fact:
+          hba_content: "{{ hbas.stdout }}"
+      when: hbas is defined and hbas.stdout is defined
+      
+      
+    - name: "[ Solaris ] Extraer HBAs"
+      ansible.builtin.script: files/getHBAs.sh solaris
+      args:
+        executable: /bin/bash
+      register: hbas
+      failed_when: false
+      changed_when: hbas.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'Solaris' 
+
+    - name: "[ Solaris ] Guardar Variable Fact de HBAs"
+      set_fact:
+          hba_content: "{{ hbas.stdout }}"
+      when: hbas is defined and hbas.stdout is defined
+      
+    - name: "[ AIX ] Extraer HBAs"
+      ansible.builtin.script: files/getHBAs.sh aix
+      args:
+        executable: /bin/bash
+      register: hbas
+      failed_when: false
+      changed_when: hbas.rc in [ 1 ]
+      when: 
+        - ansible_facts['os_family'] == 'AIX' 
+    
+    - name: "[ AIX ] Guardar Variable Fact de HBAs"
+      set_fact:
+          hba_content: "{{ hbas.stdout }}"
+      when: hbas is defined and hbas.stdout is defined
+      
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de HBAs"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ hba_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/hba_{{ inventory_hostname }}"
+    mode: '0644'
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 1 ] Insertando informacion de HBA en la   Base de datos"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          UPDATE `reporte_detalle` SET `hba` = '{{ hba_content }}' WHERE `cambio` = '{{ cambio }}' AND `hostname` = '{{ inventory_hostname }}';
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de HBAs"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ hba_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/hba_{{ inventory_hostname }}"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de HBAs"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/hba_{{ inventory_hostname }}" "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/hba_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/hba_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda

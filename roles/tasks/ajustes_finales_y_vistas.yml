@@ -1,0 +1,43 @@
+---
+- name: Obtener facts estrictamente necesarios
+  ansible.builtin.setup:
+    gather_subset:
+      - 'all'
+      - 'min'
+    filter: 
+      - ansible_date_time
+      - ansible_distribution
+      - ansible_distribution_version
+      - ansible_kernel
+      - ansible_default_ipv4.address
+      - ansible_hostname
+      - ansible_processor_vcpus
+      - ansible_memtotal_mb
+      - ansible_architecture
+      - ansible_virtualization_role
+      - ansible_product_name
+      - ansible_product_uuid
+      - ansible_os_family
+      - ansible_processor_cores
+      - ansible_machine_id
+      - ansible_dns
+      - ansible_distribution_major_version
+  timeout: 120
+  ignore_unreachable: yes
+  register: setup_facts_result
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Ajustes finales de Limpieza de Base de Datos"
+  # when: inventory_hostname != "bastion.local.com"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          DELETE FROM `reporte_detalle` WHERE `hostname` = 'bastion.local.com';
+  tags:
+    - primera

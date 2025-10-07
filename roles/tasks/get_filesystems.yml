@@ -1,0 +1,86 @@
+---
+- block: 
+    - name: "[ Linux ] Extraer Filesystems"
+      ansible.builtin.shell: timeout 10s df -hT
+      register: filesystems
+      failed_when: false
+      when: 
+        - ansible_facts['os_family'] in ['Redhat','Debian', 'Suse', 'AlmaLinux', 'RedHat' ]
+
+    - name: "[ Linux ] Guardar Variable Fact de filesystems"
+      set_fact:
+         filesystems_content: "{{ filesystems.stdout | default(' Error al obtener informacion de Filesystems Por favor revise manualmente los puntos de montaje ') }}"
+      when: filesystems is defined and filesystems.stdout is defined
+      
+    - name: "[ Solaris ] Extraer Filesystems"
+      ansible.builtin.shell: timeout 10s df -h
+      register: filesystems
+      failed_when: false
+      when: 
+        - ansible_facts['os_family'] == 'Solaris' 
+
+    - name: "[ Solaris ] Guardar Variable Fact de filesystems"
+      set_fact:
+         filesystems_content: "{{ filesystems.stdout | default(' Error al obtener informacion de Filesystems Por favor revise manualmente los puntos de montaje ')}}"
+      when: filesystems is defined and filesystems.stdout is defined
+
+    - name: "[ AIX ] Extraer Filesystems"
+      ansible.builtin.shell: df -gP | egrep -vw "Filesystem|/proc" | awk '{ print $NF }'
+      register: filesystems
+      failed_when: false
+      when: 
+        - ansible_facts['os_family'] == 'AIX' 
+    
+    - name: "[ AIX ] Guardar Variable Fact de filesystems"
+      set_fact:
+         filesystems_content: "{{ filesystems.stdout | default(' Error al obtener informacion de Filesystems Por favor revise manualmente los puntos de montaje ') }}"
+      when: filesystems is defined and filesystems.stdout is defined
+
+  # when: inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+    - segunda
+
+- name: "[ Ejecucion: 1 ] Crear reporte inicial de filesystems"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy:
+    content: "{{ filesystems_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/filesystems_{{ inventory_hostname }}"
+    mode: '0644'
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - primera
+
+- name: "[ Ejecucion: 1 ] Insertando informacion de Filesystem de red en la   Base de datos"
+  # when: inventory_hostname != "bastion.local.com"
+  delegate_to: bastion.local.com
+  community.mysql.mysql_query:
+     login_host: "{{ mysql_host }}"
+     login_user: "{{ mysql_user }}"
+     login_password: "{{ mysql_password }}"
+     login_db: "{{ mysql_db }}"
+     query: |
+          UPDATE `reporte_detalle` SET `filesystem` = '{{ filesystems_content }}' WHERE `cambio` = '{{ cambio }}' AND `hostname` = '{{ inventory_hostname }}';
+  tags:
+    - primera
+
+
+- name: "[ Ejecucion: 2 ] Crear reporte final de filesystems"
+  delegate_to: bastion.local.com
+  ansible.builtin.copy: 
+    content: "{{ filesystems_content }}"
+    dest: "{{ dest_infoprepos }}/{{ cambio }}/reporte_final/filesystems_{{ inventory_hostname }}"
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda
+
+- name: "[ Ejecucion: 2] Crear comparativo de filesystems"
+  delegate_to: bastion.local.com
+  ansible.builtin.shell: >
+        diff -u "{{ dest_infoprepos }}/{{ cambio }}/reporte_inicial/filesystems_{{ inventory_hostname }}" "{{ dest_infoprepos }}{{ cambio }}/reporte_final/filesystems_{{ inventory_hostname }}" > "{{ dest_infoprepos }}/{{ cambio }}/diff/filesystems_{{ inventory_hostname }}.diff" || true
+  when:
+    - inventory_hostname != "bastion.local.com"
+  tags:
+    - segunda
