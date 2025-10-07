@@ -56,6 +56,7 @@
     - segunda
 
 - name: "[ Ejecucion: 1 ] Crear reporte inicial de HBAs"
+  ignore_errors: yes
   delegate_to: bastion.local.com
   ansible.builtin.copy:
     content: "{{ hba_content }}"
