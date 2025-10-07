@@ -8,7 +8,7 @@ email_port: 25
 email_to: # Debe declararse en el Survey / Variable en Template 
 email_cc: # Debe declararse en el Survey / Variable en Template
 
-
+hba_content: ""
 #Variables que se documentan desde el Survey
 detalle_cambio:  # Debe declararse en el Survey / Variable en Template
 ncambio:         # Debe declararse en el Survey / Variable en Template
