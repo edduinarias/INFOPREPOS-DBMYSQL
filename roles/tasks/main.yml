@@ -3,8 +3,8 @@
 - name: Preparar Entorno de Ruster
   import_tasks: preparar_ruster.yml
 
-- name: Generar Backup de archivos
-  import_tasks: backup_files.yml
+#- name: Generar Backup de archivos
+#  import_tasks: backup_files.yml
 
 - name: Obtener Filesystems
   import_tasks: get_filesystems.yml
